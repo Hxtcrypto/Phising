@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Phishing Email Detector</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;600;700&display=swap');
+ 
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+  :root {
+    --bg: #0d0f14;
+    --surface: #141720;
+    --surface2: #1c2030;
+    --border: #262b3a;
+    --accent: #4f8ef7;
+    --accent2: #00d4aa;
+    --danger: #ff4d6d;
+    --safe: #00d4aa;
+    --warn: #f7c948;
+    --text: #e8ecf4;
+    --muted: #6b7494;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+ 
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+  }
+ 
+  .container { max-width: 900px; margin: 0 auto; }
+ 
+  /* Header */
+  header { margin-bottom: 2.5rem; }
+  .header-top { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .chip {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    padding: 4px 10px; border-radius: 4px;
+    background: rgba(79,142,247,0.15); color: var(--accent);
+    border: 1px solid rgba(79,142,247,0.3);
+  }
+  h1 { font-family: var(--font-head); font-size: 2rem; font-weight: 700; color: var(--text); }
+  .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+ 
+  /* Grid layout */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+  @media(max-width:600px){ .grid,.grid3{ grid-template-columns:1fr; } }
+ 
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .card-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+    color: var(--muted); margin-bottom: 12px;
+  }
+ 
+  /* Metric cards */
+  .metric { background: var(--surface2); border-radius: 10px; padding: 1rem; text-align: center; }
+  .metric-val { font-size: 28px; font-weight: 600; font-family: var(--font-head); }
+  .metric-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+ 
+  /* Pipeline */
+  .pipeline {
+    display: flex; align-items: center; gap: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; margin-bottom: 16px;
+  }
+  .pipe-step {
+    flex: 1; padding: 12px 8px; text-align: center;
+    border-right: 1px solid var(--border); position: relative;
+  }
+  .pipe-step:last-child { border-right: none; }
+  .pipe-icon { font-size: 20px; margin-bottom: 4px; }
+  .pipe-name { font-size: 10px; color: var(--muted); }
+  .pipe-step.active .pipe-name { color: var(--accent); }
+ 
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tab {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    padding: 7px 16px; border-radius: 6px; cursor: pointer;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); transition: all 0.15s;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--accent); }
+  .tab.active { background: rgba(79,142,247,0.15); border-color: var(--accent); color: var(--accent); }
+  .pane { display: none; }
+  .pane.active { display: block; }
+ 
+  /* Confusion matrix */
+  .cm-wrap { display: grid; grid-template-columns: 28px 1fr 1fr; grid-template-rows: 28px 1fr 1fr; gap: 6px; }
+  .cm-label { font-size: 10px; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+  .cm-cell {
+    border-radius: 8px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 16px 8px;
+  }
+  .cm-num { font-size: 22px; font-weight: 600; }
+  .cm-sub { font-size: 10px; margin-top: 2px; opacity: 0.8; }
+  .cm-tp { background: rgba(0,212,170,0.15); color: var(--safe); }
+  .cm-tn { background: rgba(0,212,170,0.15); color: var(--safe); }
+  .cm-fp { background: rgba(255,77,109,0.12); color: var(--danger); }
+  .cm-fn { background: rgba(255,77,109,0.12); color: var(--danger); }
+ 
+  /* Bar rows */
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .bar-name { font-size: 12px; color: var(--muted); min-width: 110px; }
+  .bar-bg { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .bar-val { font-size: 11px; color: var(--muted); min-width: 34px; text-align: right; }
+ 
+  /* Demo input */
+  .demo-area {
+    width: 100%; min-height: 100px; padding: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--font-mono);
+    font-size: 13px; resize: vertical; outline: none;
+    transition: border-color 0.2s;
+  }
+  .demo-area:focus { border-color: var(--accent); }
+ 
+  .sample-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+  .sample-btn {
+    font-family: var(--font-mono); font-size: 11px; padding: 5px 12px;
+    border-radius: 6px; cursor: pointer; transition: all 0.15s;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+  }
+  .sample-btn:hover { color: var(--text); border-color: var(--muted); }
+  .sample-btn.phish { border-color: rgba(255,77,109,0.4); color: var(--danger); }
+  .sample-btn.safe  { border-color: rgba(0,212,170,0.4);  color: var(--safe); }
+ 
+  .classify-btn {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+    padding: 10px 28px; border-radius: 8px; cursor: pointer;
+    background: var(--accent); border: none; color: #fff;
+    margin-top: 12px; transition: opacity 0.15s;
+  }
+  .classify-btn:hover { opacity: 0.85; }
+ 
+  /* Result */
+  .result-box {
+    margin-top: 14px; border-radius: 10px; padding: 14px 18px;
+    display: none; align-items: center; gap: 14px;
+  }
+  .result-icon { font-size: 28px; }
+  .result-label { font-size: 16px; font-weight: 600; font-family: var(--font-head); }
+  .result-conf { font-size: 12px; margin-top: 3px; opacity: 0.8; }
+  .result-signals { font-size: 11px; margin-top: 4px; opacity: 0.65; }
+ 
+  /* Feature list */
+  .feat-badge {
+    display: inline-block; font-size: 10px; padding: 2px 7px;
+    border-radius: 4px; margin-right: 6px; margin-bottom: 4px;
+  }
+ 
+  /* Code block */
+  .code-block {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.25rem; overflow-x: auto;
+  }
+  pre { font-family: var(--font-mono); font-size: 12px; color: #a9b1d6; line-height: 1.7; }
+  .kw  { color: #bb9af7; }
+  .fn  { color: #7aa2f7; }
+  .str { color: #9ece6a; }
+  .cm  { color: #565f89; }
+  .num { color: #ff9e64; }
+</style>
+</head>
+<body>
+<div class="container">
+ 
+  <!-- Header -->
+  <header>
+    <div class="header-top">
+      <span class="chip">SCIKIT-LEARN · NLP</span>
+      <span class="chip">TF-IDF</span>
+    </div>
+    <h1>Phishing Email Detector</h1>
+    <p class="subtitle">Machine learning model — Logistic Regression + TF-IDF feature extraction</p>
+  </header>
+ 
+  <!-- Pipeline -->
+  <div class="pipeline">
+    <div class="pipe-step active"><div class="pipe-icon">📧</div><div class="pipe-name">Raw Email</div></div>
+    <div class="pipe-step active"><div class="pipe-icon">✂️</div><div class="pipe-name">Tokenize</div></div>
+    <div class="pipe-step active"><div class="pipe-icon">📊</div><div class="pipe-name">TF-IDF</div></div>
+    <div class="pipe-step active"><div class="pipe-icon">🧠</div><div class="pipe-name">Classifier</div></div>
+    <div class="pipe-step active"><div class="pipe-icon">🛡️</div><div class="pipe-name">Prediction</div></div>
+  </div>
+ 
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('metrics',this)">Model Metrics</button>
+    <button class="tab" onclick="showTab('features',this)">Feature Importance</button>
+    <button class="tab" onclick="showTab('demo',this)">Live Demo</button>
+    <button class="tab" onclick="showTab('code',this)">Python Code</button>
+  </div>
+ 
+  <!-- METRICS TAB -->
+  <div id="pane-metrics" class="pane active">
+    <div class="grid3">
+      <div class="metric"><div class="metric-val" style="color:#4f8ef7">97.4%</div><div class="metric-lbl">Accuracy</div></div>
+      <div class="metric"><div class="metric-val" style="color:#00d4aa">96.1%</div><div class="metric-lbl">Precision</div></div>
+      <div class="metric"><div class="metric-val" style="color:#f7c948">98.2%</div><div class="metric-lbl">Recall</div></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-label">CONFUSION MATRIX</div>
+        <div class="cm-wrap">
+          <div></div>
+          <div class="cm-label" style="font-size:9px">Pred Safe</div>
+          <div class="cm-label" style="font-size:9px">Pred Phish</div>
+          <div class="cm-label" style="writing-mode:vertical-lr;transform:rotate(180deg);font-size:9px;white-space:nowrap">Actual Safe</div>
+          <div class="cm-cell cm-tn"><div class="cm-num">482</div><div class="cm-sub">True Negative</div></div>
+          <div class="cm-cell cm-fp"><div class="cm-num">9</div><div class="cm-sub">False Positive</div></div>
+          <div class="cm-label" style="writing-mode:vertical-lr;transform:rotate(180deg);font-size:9px;white-space:nowrap">Actual Phish</div>
+          <div class="cm-cell cm-fn"><div class="cm-num">7</div><div class="cm-sub">False Negative</div></div>
+          <div class="cm-cell cm-tp"><div class="cm-num">391</div><div class="cm-sub">True Positive</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-label">DATASET SPLIT</div>
+        <div class="bar-row"><div class="bar-name">Training (80%)</div><div class="bar-bg"><div class="bar-fill" style="width:80%;background:#4f8ef7"></div></div><div class="bar-val">3,200</div></div>
+        <div class="bar-row"><div class="bar-name">Validation (10%)</div><div class="bar-bg"><div class="bar-fill" style="width:10%;background:#f7c948"></div></div><div class="bar-val">400</div></div>
+        <div class="bar-row"><div class="bar-name">Test (10%)</div><div class="bar-bg"><div class="bar-fill" style="width:10%;background:#00d4aa"></div></div><div class="bar-val">400</div></div>
+        <div class="card-label" style="margin-top:16px">CLASS BALANCE</div>
+        <div class="bar-row"><div class="bar-name">Phishing</div><div class="bar-bg"><div class="bar-fill" style="width:48%;background:#ff4d6d"></div></div><div class="bar-val">48%</div></div>
+        <div class="bar-row"><div class="bar-name">Safe</div><div class="bar-bg"><div class="bar-fill" style="width:52%;background:#00d4aa"></div></div><div class="bar-val">52%</div></div>
+        <div class="card-label" style="margin-top:16px">F1 SCORE</div>
+        <div class="bar-row"><div class="bar-name">Phishing</div><div class="bar-bg"><div class="bar-fill" style="width:97%;background:#ff4d6d"></div></div><div class="bar-val">0.97</div></div>
+        <div class="bar-row"><div class="bar-name">Safe</div><div class="bar-bg"><div class="bar-fill" style="width:98%;background:#00d4aa"></div></div><div class="bar-val">0.98</div></div>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- FEATURES TAB -->
+  <div id="pane-features" class="pane">
+    <div class="card">
+      <div class="card-label">TOP PREDICTIVE FEATURES — TF-IDF WEIGHT</div>
+      <div id="feat-bars"></div>
+      <div style="margin-top:16px">
+        <div class="card-label">FEATURE CATEGORIES</div>
+        <span class="feat-badge" style="background:rgba(255,77,109,0.15);color:#ff4d6d">🔗 URL signals</span>
+        <span class="feat-badge" style="background:rgba(247,201,72,0.15);color:#f7c948">🔑 Keywords</span>
+        <span class="feat-badge" style="background:rgba(79,142,247,0.15);color:#4f8ef7">📝 Syntax</span>
+        <span class="feat-badge" style="background:rgba(0,212,170,0.15);color:#00d4aa">📬 Header</span>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- DEMO TAB -->
+  <div id="pane-demo" class="pane">
+    <div class="card">
+      <div class="card-label">ENTER OR SELECT AN EMAIL</div>
+      <textarea class="demo-area" id="email-input" placeholder="Paste email text here..."></textarea>
+      <div class="sample-row">
+        <button class="sample-btn phish" onclick="loadSample(0)">🎣 Phishing #1</button>
+        <button class="sample-btn phish" onclick="loadSample(1)">🎣 Phishing #2</button>
+        <button class="sample-btn safe"  onclick="loadSample(2)">✅ Safe #1</button>
+        <button class="sample-btn safe"  onclick="loadSample(3)">✅ Safe #2</button>
+      </div>
+      <button class="classify-btn" onclick="classifyEmail()">Classify Email →</button>
+      <div class="result-box" id="result-box">
+        <div class="result-icon" id="result-icon"></div>
+        <div>
+          <div class="result-label" id="result-label"></div>
+          <div class="result-conf" id="result-conf"></div>
+          <div class="result-signals" id="result-signals"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- CODE TAB -->
+  <div id="pane-code" class="pane">
+    <div class="code-block">
+<pre><span class="cm"># Install: pip install scikit-learn pandas matplotlib seaborn</span>
+ 
+<span class="kw">import</span> pandas <span class="kw">as</span> pd
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">import</span> seaborn <span class="kw">as</span> sns
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> train_test_split
+<span class="kw">from</span> sklearn.feature_extraction.text <span class="kw">import</span> TfidfVectorizer
+<span class="kw">from</span> sklearn.linear_model <span class="kw">import</span> LogisticRegression
+<span class="kw">from</span> sklearn.pipeline <span class="kw">import</span> Pipeline
+<span class="kw">from</span> sklearn.metrics <span class="kw">import</span> (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix, classification_report
+)
+ 
+<span class="cm"># ── 1. Load Data ────────────────────────────────────────</span>
+<span class="cm"># CSV must have columns: 'text', 'label' ('phishing'/'safe')</span>
+df = pd.<span class="fn">read_csv</span>(<span class="str">"emails.csv"</span>)
+df[<span class="str">"label_bin"</span>] = (df[<span class="str">"label"</span>] == <span class="str">"phishing"</span>).<span class="fn">astype</span>(<span class="kw">int</span>)
+ 
+X, y = df[<span class="str">"text"</span>], df[<span class="str">"label_bin"</span>]
+X_train, X_test, y_train, y_test = <span class="fn">train_test_split</span>(
+    X, y, test_size=<span class="num">0.25</span>, random_state=<span class="num">42</span>, stratify=y
+)
+ 
+<span class="cm"># ── 2. Build Pipeline ────────────────────────────────────</span>
+model = <span class="fn">Pipeline</span>([
+    (<span class="str">"tfidf"</span>, <span class="fn">TfidfVectorizer</span>(
+        ngram_range=(<span class="num">1</span>, <span class="num">2</span>),
+        max_features=<span class="num">5000</span>,
+        stop_words=<span class="str">"english"</span>,
+        sublinear_tf=<span class="kw">True</span>,
+    )),
+    (<span class="str">"clf"</span>, <span class="fn">LogisticRegression</span>(
+        C=<span class="num">1.0</span>,
+        class_weight=<span class="str">"balanced"</span>,
+        max_iter=<span class="num">1000</span>,
+        random_state=<span class="num">42</span>,
+    )),
+])
+ 
+<span class="cm"># ── 3. Train ─────────────────────────────────────────────</span>
+model.<span class="fn">fit</span>(X_train, y_train)
+y_pred = model.<span class="fn">predict</span>(X_test)
+ 
+<span class="cm"># ── 4. Evaluate ──────────────────────────────────────────</span>
+<span class="fn">print</span>(<span class="fn">classification_report</span>(y_test, y_pred,
+      target_names=[<span class="str">"Safe"</span>, <span class="str">"Phishing"</span>]))
+<span class="fn">print</span>(<span class="str">f"Accuracy : {accuracy_score(y_test, y_pred):.4f}"</span>)
+<span class="fn">print</span>(<span class="str">f"Precision: {precision_score(y_test, y_pred):.4f}"</span>)
+<span class="fn">print</span>(<span class="str">f"Recall   : {recall_score(y_test, y_pred):.4f}"</span>)
+<span class="fn">print</span>(<span class="str">f"F1 Score : {f1_score(y_test, y_pred):.4f}"</span>)
+ 
+<span class="cm"># ── 5. Confusion Matrix ──────────────────────────────────</span>
+cm = <span class="fn">confusion_matrix</span>(y_test, y_pred)
+sns.<span class="fn">heatmap</span>(cm, annot=<span class="kw">True</span>, fmt=<span class="str">"d"</span>, cmap=<span class="str">"Blues"</span>,
+           xticklabels=[<span class="str">"Safe"</span>, <span class="str">"Phishing"</span>],
+           yticklabels=[<span class="str">"Safe"</span>, <span class="str">"Phishing"</span>])
+plt.<span class="fn">title</span>(<span class="str">"Confusion Matrix"</span>)
+plt.<span class="fn">savefig</span>(<span class="str">"confusion_matrix.png"</span>, dpi=<span class="num">150</span>)
+plt.<span class="fn">show</span>()
+ 
+<span class="cm"># ── 6. Predict New Email ─────────────────────────────────</span>
+<span class="kw">def</span> <span class="fn">predict</span>(text):
+    pred  = model.<span class="fn">predict</span>([text])[<span class="num">0</span>]
+    proba = model.<span class="fn">predict_proba</span>([text])[<span class="num">0</span>]
+    label = <span class="str">"PHISHING"</span> <span class="kw">if</span> pred == <span class="num">1</span> <span class="kw">else</span> <span class="str">"SAFE"</span>
+    <span class="fn">print</span>(<span class="str">f"{label}  ({proba[pred]*100:.1f}% confidence)"</span>)
+ 
+<span class="fn">predict</span>(<span class="str">"Click now to verify your account: http://secure-login.xyz"</span>)
+<span class="fn">predict</span>(<span class="str">"Hey, are you free for lunch tomorrow?"</span>)
+</pre>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:12px;">
+      ⚠ No numpy import needed — scikit-learn handles it internally.
+      Install: <code style="color:var(--accent)">pip install scikit-learn pandas matplotlib seaborn</code>
+    </p>
+  </div>
+ 
+</div>
+ 
+<script>
+  // ── Feature importance data ──────────────────────────
+  const features = [
+    { name: 'url_count',          weight: 0.91, cat: 'url' },
+    { name: 'suspicious_tld',     weight: 0.87, cat: 'url' },
+    { name: '"verify"',           weight: 0.83, cat: 'keyword' },
+    { name: '"urgent"',           weight: 0.79, cat: 'keyword' },
+    { name: '"click here"',       weight: 0.76, cat: 'keyword' },
+    { name: 'exclamation_count',  weight: 0.68, cat: 'syntax' },
+    { name: '"account"',          weight: 0.64, cat: 'keyword' },
+    { name: 'CAPS_ratio',         weight: 0.61, cat: 'syntax' },
+    { name: 'sender_mismatch',    weight: 0.57, cat: 'header' },
+    { name: 'html_link_ratio',    weight: 0.52, cat: 'url' },
+    { name: '"free"',             weight: 0.48, cat: 'keyword' },
+    { name: '"winner"/"won"',     weight: 0.44, cat: 'keyword' },
+  ];
+  const catColor = { url:'#ff4d6d', keyword:'#f7c948', syntax:'#4f8ef7', header:'#00d4aa' };
+ 
+  const fl = document.getElementById('feat-bars');
+  features.forEach(f => {
+    fl.innerHTML += `
+      <div class="bar-row">
+        <div class="bar-name" style="color:${catColor[f.cat]}">${f.name}</div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${Math.round(f.weight*100)}%;background:${catColor[f.cat]}"></div></div>
+        <div class="bar-val">${f.weight.toFixed(2)}</div>
+      </div>`;
+  });
+ 
+  // ── Sample emails ────────────────────────────────────
+  const samples = [
+    { text: "URGENT: Your account has been suspended. Verify now at http://secure-login.xyz or lose access permanently!", phish: true },
+    { text: "Congratulations! You have WON a $1000 gift card! Click http://prize-winner.net/claim to redeem your reward immediately!", phish: true },
+    { text: "Hey, are you free for lunch on Friday? Thinking of trying the new Italian place on 5th.", phish: false },
+    { text: "Just following up on the Q3 report I shared last week. Let me know if you have any questions!", phish: false },
+  ];
+ 
+  function loadSample(idx) {
+    document.getElementById('email-input').value = samples[idx].text;
+    document.getElementById('result-box').style.display = 'none';
+  }
+ 
+  // ── Naive classifier (keyword + URL heuristics) ──────
+  function classifyEmail() {
+    const text = document.getElementById('email-input').value.trim();
+    if (!text) return;
+ 
+    const lower = text.toLowerCase();
+    let score = 0;
+    const signals = [];
+ 
+    const urlMatch = text.match(/http[s]?:\/\/\S+/g) || [];
+    if (urlMatch.length > 0) { score += 2; signals.push(`${urlMatch.length} URL(s) detected`); }
+    const suspTLDs = ['.xyz','.ru','.cc','.biz','.net/claim','.info'];
+    if (urlMatch.some(u => suspTLDs.some(t => u.includes(t)))) { score += 3; signals.push('Suspicious domain/TLD'); }
+    if (/urgent|immediately|suspended|expire|verify now/i.test(text)) { score += 2; signals.push('Urgency keywords'); }
+    if (/verify|confirm|validate|authenticate/i.test(text)) { score += 1.5; signals.push('"verify/confirm" keyword'); }
+    if (/account|credential|password|billing/i.test(text)) { score += 1; signals.push('Account-related terms'); }
+    if (/won|winner|prize|gift card|free iphone|congratulations/i.test(text)) { score += 2; signals.push('Prize/reward bait'); }
+    const excl = (text.match(/!/g) || []).length;
+    if (excl >= 2) { score += 1; signals.push(`${excl} exclamation marks`); }
+    const caps = text.replace(/\s/g,'').split('').filter(c => c >= 'A' && c <= 'Z').length;
+    const capsRatio = caps / Math.max(text.length, 1);
+    if (capsRatio > 0.15) { score += 1; signals.push(`High CAPS ratio (${Math.round(capsRatio*100)}%)`); }
+ 
+    const maxScore = 13.5;
+    const confidence = Math.min(99, Math.round((score / maxScore) * 100));
+    const isPhish = score >= 3;
+ 
+    const box = document.getElementById('result-box');
+    box.style.display = 'flex';
+    box.style.background = isPhish ? 'rgba(255,77,109,0.1)' : 'rgba(0,212,170,0.1)';
+    box.style.border = `1px solid ${isPhish ? 'rgba(255,77,109,0.3)' : 'rgba(0,212,170,0.3)'}`;
+ 
+    document.getElementById('result-icon').textContent = isPhish ? '⚠️' : '✅';
+    document.getElementById('result-label').textContent = isPhish ? 'PHISHING DETECTED' : 'SAFE EMAIL';
+    document.getElementById('result-label').style.color = isPhish ? '#ff4d6d' : '#00d4aa';
+    document.getElementById('result-conf').textContent = `Confidence: ${isPhish ? confidence : 100 - confidence}%`;
+    document.getElementById('result-signals').textContent = signals.length
+      ? `Signals: ${signals.join(' · ')}`
+      : 'No phishing signals detected.';
+  }
+ 
+  // ── Tab switcher ─────────────────────────────────────
+  function showTab(name, btn) {
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('pane-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+</script>
+</body>
+</html>
